@@ -8,7 +8,7 @@ require('dotenv').config();
 const fetch = require('node-fetch');
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 3002;
 
 // Middleware
 app.use(cors());
@@ -29,8 +29,20 @@ const connectWithRetry = async () => {
   };
 
   try {
-    const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/fuel-credit-score';
+    const uri = process.env.MONGODB_URI;
+    console.log('Raw MONGODB_URI:', uri); // Add this line to see the raw URI
+    
+    if (!uri) {
+      throw new Error('MONGODB_URI is not set in environment variables');
+    }
+    
+    if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
+      throw new Error(`Invalid MongoDB URI format: ${uri}`);
+    }
+    
     console.log('Attempting to connect to MongoDB...');
+    console.log('Connection URI:', uri.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@')); // Hide credentials in logs
+    
     await mongoose.connect(uri, options);
     console.log('Connected to MongoDB successfully');
   } catch (err) {
@@ -95,7 +107,8 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
     interval: 300,
     autoStart: true,
     params: {
-      timeout: 10
+      timeout: 10,
+      allowed_updates: ['message', 'callback_query']
     }
   }
 });
@@ -103,13 +116,29 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
 // Handle polling errors
 bot.on('polling_error', (error) => {
   console.error('Polling error:', error);
-  // If it's a conflict error, try to restart polling
+  
+  // If it's a conflict error, try to restart polling with a delay
   if (error.code === 'ETELEGRAM' && error.message.includes('409 Conflict')) {
-    console.log('Restarting polling...');
+    console.log('Polling conflict detected. Restarting polling in 5 seconds...');
+    
+    // Stop polling
     bot.stopPolling().then(() => {
+      // Wait 5 seconds before restarting
       setTimeout(() => {
-        bot.startPolling();
+        console.log('Restarting polling...');
+        bot.startPolling({
+          interval: 300,
+          autoStart: true,
+          params: {
+            timeout: 10,
+            allowed_updates: ['message', 'callback_query']
+          }
+        }).catch(err => {
+          console.error('Error restarting polling:', err);
+        });
       }, 5000);
+    }).catch(err => {
+      console.error('Error stopping polling:', err);
     });
   }
 });
@@ -121,6 +150,67 @@ bot.setMyCommands([
   { command: '/leaderboard', description: 'View the top 10 credit scores in this group' }
 ]).catch(error => {
   console.error('Error setting bot commands:', error);
+});
+
+// Handle /start command
+bot.onText(/\/start/, async (msg) => {
+  try {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    const username = msg.from.first_name || msg.from.username;
+
+    // Check if user already exists
+    let user = await User.findOne({ 
+      telegramId: userId.toString(),
+      chatId: chatId.toString()
+    });
+
+    if (!user) {
+      // Create new user
+      user = new User({
+        telegramId: userId.toString(),
+        chatId: chatId.toString(),
+        username: username,
+        creditScore: 0
+      });
+      await user.save();
+      await bot.sendMessage(chatId, `👋 Welcome ${username}! You've been registered in the Fuel Credit Score system. Your initial score is 0.`);
+    } else {
+      await bot.sendMessage(chatId, `👋 Welcome back ${username}! Your current credit score is ${user.creditScore}.`);
+    }
+  } catch (err) {
+    console.error('Error handling /start command:', err);
+    await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error processing your request. Please try again later.");
+  }
+});
+
+// Handle /leaderboard command
+bot.onText(/\/leaderboard/, async (msg) => {
+  try {
+    const chatId = msg.chat.id;
+    
+    // Get top 10 users for this chat
+    const topUsers = await User.find({ chatId: chatId.toString() })
+      .sort({ creditScore: -1 })
+      .limit(10);
+
+    if (topUsers.length === 0) {
+      await bot.sendMessage(chatId, "📊 No credit scores recorded yet in this group.");
+      return;
+    }
+
+    // Create leaderboard message
+    let leaderboardMessage = "🏆 *Fuel Credit Score Leaderboard* 🏆\n\n";
+    topUsers.forEach((user, index) => {
+      const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `${index + 1}.`;
+      leaderboardMessage += `${medal} ${user.username}: ${user.creditScore} points\n`;
+    });
+
+    await bot.sendMessage(chatId, leaderboardMessage, { parse_mode: 'Markdown' });
+  } catch (err) {
+    console.error('Error handling /leaderboard command:', err);
+    await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error fetching the leaderboard. Please try again later.");
+  }
 });
 
 // Debug: Log all messages
@@ -197,7 +287,7 @@ bot.on('message', async (msg) => {
           }
           
           message += `\n\nCurrent social credit: ${user.creditScore}`;
-          
+           
           // Add emoji based on score
           if (user.creditScore > 100) {
             message += ' 🏅';
@@ -210,156 +300,23 @@ bot.on('message', async (msg) => {
           } else if (user.creditScore < 0) {
             message += ' 😅';
           }
-          
+
           await bot.sendMessage(msg.chat.id, message, {
             reply_to_message_id: msg.message_id,
             parse_mode: 'Markdown'
           });
-        } catch (error) {
-          console.error('Error processing sticker reaction:', error);
-          await bot.sendMessage(msg.chat.id, '😱 Oops! Something went wrong while processing the credit change. The Party is investigating...');
+        } catch (err) {
+          console.error('Error updating credit score:', err);
+          await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error updating your credit score. Please try again later.");
         }
-      } else {
-        await bot.sendMessage(msg.chat.id, '🤔 Hmm, that sticker doesn\'t affect social credit scores. Try using one of our special stickers!');
       }
-    } catch (error) {
-      console.error('Error in sticker handler:', error);
-      await bot.sendMessage(msg.chat.id, '😱 Oops! Something went wrong while processing the credit change. The Party is investigating...');
+    } catch (err) {
+      console.error('Error handling sticker reaction:', err);
+      await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error handling the sticker reaction. Please try again later.");
     }
   }
 });
 
-// Bot commands
-bot.onText(/\/start/, async (msg) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from.id;
-  const username = msg.from.username;
-  const firstName = msg.from.first_name;
-  const lastName = msg.from.last_name;
-
-  try {
-    // Check if the command is used in a group
-    if (msg.chat.type === 'group' || msg.chat.type === 'supergroup') {
-      // Get chat member info to check if user is admin
-      const chatMember = await bot.getChatMember(chatId, userId);
-      
-      // Check if user is an admin or creator
-      if (!['administrator', 'creator'].includes(chatMember.status)) {
-        bot.sendMessage(chatId, '🚫 Sorry, only group administrators can use this command. The Party requires proper authorization!');
-        return;
-      }
-    }
-
-    let user = await User.findOne({ 
-      telegramId: userId,
-      chatId: chatId.toString()
-    });
-    
-    if (!user) {
-      user = await User.create({
-        telegramId: userId,
-        chatId: chatId.toString(),
-        username,
-        firstName,
-        lastName,
-        creditScore: 0
-      });
-    }
-    
-    const welcomeMessages = [
-      `🎉 Welcome to The Fuel Social Credit System! Your current score in this group is: ${user.creditScore}`,
-      `🌟 Greetings, citizen! You have been registered in The Fuel Social Credit System. Current score: ${user.creditScore}`,
-      `🏆 Welcome to the system! Your social credit journey begins here. Current score: ${user.creditScore}`,
-      `✨ The Party welcomes you! Your current social credit score is: ${user.creditScore}`
-    ];
-    
-    const message = welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)];
-    bot.sendMessage(chatId, message);
-  } catch (error) {
-    console.error('Error in /start command:', error);
-    bot.sendMessage(chatId, '😱 Oops! Something went wrong. The Party\'s servers are experiencing technical difficulties...');
-  }
-});
-
-bot.onText(/\/score/, async (msg) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from.id;
-
-  try {
-    const user = await User.findOne({ 
-      telegramId: userId,
-      chatId: chatId.toString()
-    });
-    
-    if (user) {
-      const scoreMessages = [
-        `📊 Your current social credit score in this group is: ${user.creditScore}`,
-        `🎯 The Party has evaluated your contributions. Current score: ${user.creditScore}`,
-        `📈 Your social credit standing in this group: ${user.creditScore}`,
-        `💫 The Fuel Social Credit System reports your current score: ${user.creditScore}`
-      ];
-      
-      const message = scoreMessages[Math.floor(Math.random() * scoreMessages.length)];
-      bot.sendMessage(chatId, message);
-    } else {
-      bot.sendMessage(chatId, '❌ You are not registered in this group. Use /start to join The Fuel Social Credit System!');
-    }
-  } catch (error) {
-    console.error('Error in /score command:', error);
-    bot.sendMessage(chatId, '😱 Oops! Something went wrong. The Party\'s servers are experiencing technical difficulties...');
-  }
-});
-
-bot.onText(/\/leaderboard/, async (msg) => {
-  const chatId = msg.chat.id;
-
-  try {
-    const topUsers = await User.find({ chatId: chatId.toString() })
-      .sort({ creditScore: -1 })
-      .limit(10);
-      
-    if (topUsers.length === 0) {
-      bot.sendMessage(chatId, '📊 No citizens have been registered in this group yet. Use /start to join The Fuel Social Credit System!');
-      return;
-    }
-    
-    let message = '🏆 *Top 10 Social Credit Scores in this group:*\n\n';
-    topUsers.forEach((user, index) => {
-      const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🎯';
-      message += `${medal} ${index + 1}. ${user.firstName || user.username}: ${user.creditScore}\n`;
-    });
-    
-    bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-  } catch (error) {
-    console.error('Error in /leaderboard command:', error);
-    bot.sendMessage(chatId, '😱 Oops! Something went wrong. The Party\'s servers are experiencing technical difficulties...');
-  }
-});
-
-// API Routes
-app.get('/api/users', async (req, res) => {
-  try {
-    const users = await User.find().sort({ creditScore: -1 });
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ error: 'Error fetching users' });
-  }
-});
-
-app.get('/api/users/:telegramId', async (req, res) => {
-  try {
-    const user = await User.findOne({ telegramId: req.params.telegramId });
-    if (user) {
-      res.json(user);
-    } else {
-      res.status(404).json({ error: 'User not found' });
-    }
-  } catch (error) {
-    res.status(500).json({ error: 'Error fetching user' });
-  }
-});
-
-// Start server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
-}); 
+});
