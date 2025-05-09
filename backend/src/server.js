@@ -24,8 +24,6 @@ const connectWithRetry = async () => {
     family: 4,
     ssl: true,
     tls: true,
-    tlsInsecure: true,
-    directConnection: true,
     retryWrites: true,
     w: 'majority'
   };
