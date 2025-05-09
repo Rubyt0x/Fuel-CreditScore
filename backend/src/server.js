@@ -21,7 +21,11 @@ const connectWithRetry = async () => {
     useUnifiedTopology: true,
     serverSelectionTimeoutMS: 5000,
     socketTimeoutMS: 45000,
-    family: 4
+    family: 4,
+    ssl: true,
+    tls: true,
+    tlsAllowInvalidCertificates: true,
+    tlsAllowInvalidHostnames: true
   };
 
   try {
