@@ -19,20 +19,28 @@ const connectWithRetry = async () => {
   const options = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 30000,
     socketTimeoutMS: 45000,
     family: 4,
     ssl: true,
     tls: true,
-    tlsAllowInvalidCertificates: true,
-    tlsAllowInvalidHostnames: true
+    tlsInsecure: true,
+    directConnection: true,
+    retryWrites: true,
+    w: 'majority'
   };
 
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/fuel-credit-score', options);
-    console.log('Connected to MongoDB');
+    const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/fuel-credit-score';
+    console.log('Attempting to connect to MongoDB...');
+    await mongoose.connect(uri, options);
+    console.log('Connected to MongoDB successfully');
   } catch (err) {
     console.error('MongoDB connection error:', err);
+    console.log('Connection details:', {
+      uri: process.env.MONGODB_URI ? 'URI is set' : 'URI is not set',
+      options: JSON.stringify(options, null, 2)
+    });
     console.log('Retrying connection in 5 seconds...');
     setTimeout(connectWithRetry, 5000);
   }
@@ -48,6 +56,10 @@ mongoose.connection.on('error', (err) => {
 mongoose.connection.on('disconnected', () => {
   console.log('MongoDB disconnected. Attempting to reconnect...');
   connectWithRetry();
+});
+
+mongoose.connection.on('connected', () => {
+  console.log('MongoDB connected successfully');
 });
 
 // User Schema
