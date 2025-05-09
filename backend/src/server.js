@@ -90,7 +90,29 @@ const STICKER_CREDITS = {
 };
 
 // Telegram Bot setup
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { 
+  polling: {
+    interval: 300,
+    autoStart: true,
+    params: {
+      timeout: 10
+    }
+  }
+});
+
+// Handle polling errors
+bot.on('polling_error', (error) => {
+  console.error('Polling error:', error);
+  // If it's a conflict error, try to restart polling
+  if (error.code === 'ETELEGRAM' && error.message.includes('409 Conflict')) {
+    console.log('Restarting polling...');
+    bot.stopPolling().then(() => {
+      setTimeout(() => {
+        bot.startPolling();
+      }, 5000);
+    });
+  }
+});
 
 // Set up bot commands
 bot.setMyCommands([
