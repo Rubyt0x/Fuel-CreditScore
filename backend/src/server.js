@@ -176,7 +176,7 @@ bot.onText(/\/start/, async (msg) => {
       await user.save();
       await bot.sendMessage(chatId, `👋 Welcome ${username}! You've been registered in the Fuel Credit Score system. Your initial score is 0.`);
     } else {
-      await bot.sendMessage(chatId, `👋 Welcome back ${username}! Your current credit score is ${user.creditScore}.`);
+      await bot.sendMessage(chatId, `👋 Hey fren ${username}! Your current credit score is ${user.creditScore}.`);
     }
   } catch (err) {
     console.error('Error handling /start command:', err);
@@ -270,17 +270,17 @@ bot.on('message', async (msg) => {
           let message;
           if (creditChange > 0) {
             const positiveMessages = [
-              `🎉 ${targetUsername} just gained ${creditChange} social credit points from ${senderName}! They're on their way to becoming a model citizen!`,
-              `🌟 ${targetUsername} earned ${creditChange} social credit points from ${senderName}! The Party is pleased with your contribution!`,
-              `🏆 ${targetUsername} received ${creditChange} social credit points from ${senderName}! Your loyalty to The Fuel has been noted!`,
-              `✨ ${targetUsername} gained ${creditChange} social credit points from ${senderName}! The Party smiles upon you!`
+              `⛽️ ${targetUsername} just gained ${creditChange} social credit points from ${senderName}! They're on their way to becoming a model citizen!`,
+              `🪓 ${targetUsername} earned ${creditChange} social credit points from ${senderName}! Nick is pleased with your contribution!`,
+              `🏎️ ${targetUsername} received ${creditChange} social credit points from ${senderName}! Your loyalty to The Fuel has been noted!`,
+              `🔥 ${targetUsername} gained ${creditChange} social credit points from ${senderName}! Nick smiles upon you!`
             ];
             message = positiveMessages[Math.floor(Math.random() * positiveMessages.length)];
           } else {
             const negativeMessages = [
-              `⚠️ ${targetUsername} lost ${Math.abs(creditChange)} social credit points due to ${senderName}! The Party is disappointed...`,
+              `😡 ${targetUsername} lost ${Math.abs(creditChange)} social credit points due to ${senderName}! Nick is disappointed...`,
               `😔 ${targetUsername} had ${Math.abs(creditChange)} social credit points deducted by ${senderName}! Better luck next time!`,
-              `📉 ${targetUsername} lost ${Math.abs(creditChange)} social credit points because of ${senderName}! The Party expects better behavior!`,
+              `📉 ${targetUsername} lost ${Math.abs(creditChange)} social credit points because of ${senderName}! Nick expects better behavior!`,
               `🚫 ${targetUsername} had ${Math.abs(creditChange)} social credit points removed by ${senderName}! This is not the way of The Fuel!`
             ];
             message = negativeMessages[Math.floor(Math.random() * negativeMessages.length)];
@@ -290,9 +290,9 @@ bot.on('message', async (msg) => {
            
           // Add emoji based on score
           if (user.creditScore > 100) {
-            message += ' 🏅';
+            message += ' ⛽️';
           } else if (user.creditScore > 50) {
-            message += ' 🥇';
+            message += ' 🪓';
           } else if (user.creditScore > 0) {
             message += ' 🎯';
           } else if (user.creditScore < -50) {
