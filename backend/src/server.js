@@ -98,8 +98,42 @@ const STICKER_CREDITS = {
 
 // Telegram Bot setup
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { 
-  polling: true // Enable polling for development
+  polling: {
+    interval: 300,
+    autoStart: false
+  }
 });
+
+// Start polling with error handling
+const startPolling = async () => {
+  try {
+    await bot.stopPolling();
+    await bot.startPolling();
+    console.log('Bot polling started successfully');
+  } catch (err) {
+    console.error('Error starting bot polling:', err);
+    if (err.message.includes('terminated by other getUpdates request')) {
+      console.log('Another instance is running. Waiting 5 seconds before retrying...');
+      setTimeout(startPolling, 5000);
+    }
+  }
+};
+
+// Handle process termination
+process.on('SIGINT', async () => {
+  console.log('Stopping bot polling...');
+  await bot.stopPolling();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Stopping bot polling...');
+  await bot.stopPolling();
+  process.exit(0);
+});
+
+// Start the bot
+startPolling();
 
 // Set up bot commands
 bot.setMyCommands([
