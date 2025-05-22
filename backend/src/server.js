@@ -221,11 +221,19 @@ bot.onText(/\/score/, async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
 
+    console.log('Score command received:', {
+      chatId,
+      userId,
+      username: msg.from.username || msg.from.first_name
+    });
+
     // Find user's score
     const user = await User.findOne({ 
       telegramId: userId.toString(),
       chatId: chatId.toString()
     });
+
+    console.log('User lookup result:', user);
 
     if (!user) {
       await bot.sendMessage(chatId, "❌ You haven't registered yet. Use /start to register!");
@@ -236,6 +244,11 @@ bot.onText(/\/score/, async (msg) => {
     await bot.sendMessage(chatId, `${emoji} Your current credit score is: ${user.creditScore} points`);
   } catch (err) {
     console.error('Error handling /score command:', err);
+    console.error('Error details:', {
+      message: err.message,
+      stack: err.stack,
+      name: err.name
+    });
     await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error fetching your score. Please try again later.");
   }
 });
