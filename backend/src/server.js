@@ -103,7 +103,20 @@ const STICKER_CREDITS = {
 
 // Telegram Bot setup
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { 
-  polling: false // Disable polling completely
+  polling: {
+    interval: 300,
+    autoStart: true,
+    params: {
+      timeout: 10,
+      allowed_updates: ['message', 'callback_query', 'message_reaction'],
+      offset: -1 // Start from the latest update
+    }
+  }
+});
+
+// Handle polling errors
+bot.on('polling_error', (error) => {
+  console.error('Polling error:', error);
 });
 
 // Set up webhook for production
