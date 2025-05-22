@@ -15,7 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB connection
-const connectWithRetry = async () => {
+const connectWithRetry = async (chatId = null) => {
   const options = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -29,19 +29,24 @@ const connectWithRetry = async () => {
   };
 
   try {
-    const uri = process.env.MONGODB_URI;
-    console.log('Raw MONGODB_URI:', uri); // Add this line to see the raw URI
+    const baseUri = process.env.MONGODB_URI;
+    console.log('Raw MONGODB_URI:', baseUri);
     
-    if (!uri) {
+    if (!baseUri) {
       throw new Error('MONGODB_URI is not set in environment variables');
     }
     
-    if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
-      throw new Error(`Invalid MongoDB URI format: ${uri}`);
+    if (!baseUri.startsWith('mongodb://') && !baseUri.startsWith('mongodb+srv://')) {
+      throw new Error(`Invalid MongoDB URI format: ${baseUri}`);
     }
+
+    // If chatId is provided, create a group-specific database
+    const uri = chatId 
+      ? `${baseUri.split('?')[0]}_${chatId}?${baseUri.split('?')[1]}`
+      : baseUri;
     
     console.log('Attempting to connect to MongoDB...');
-    console.log('Connection URI:', uri.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@')); // Hide credentials in logs
+    console.log('Connection URI:', uri.replace(/\/\/[^:]+:[^@]+@/, '//<credentials>@'));
     
     await mongoose.connect(uri, options);
     console.log('Connected to MongoDB successfully');
@@ -52,10 +57,11 @@ const connectWithRetry = async () => {
       options: JSON.stringify(options, null, 2)
     });
     console.log('Retrying connection in 5 seconds...');
-    setTimeout(connectWithRetry, 5000);
+    setTimeout(() => connectWithRetry(chatId), 5000);
   }
 };
 
+// Initial connection without chatId
 connectWithRetry();
 
 // Handle MongoDB connection events
@@ -86,14 +92,27 @@ userSchema.index({ telegramId: 1, chatId: 1 }, { unique: true });
 
 const User = mongoose.model('User', userSchema);
 
-// Drop existing indexes and recreate them
-User.collection.dropIndexes().then(() => {
-  console.log('Dropped existing indexes');
-  User.collection.createIndex({ telegramId: 1, chatId: 1 }, { unique: true });
-  console.log('Created new compound index');
-}).catch(err => {
-  console.error('Error managing indexes:', err);
-});
+// Function to get or create database connection for a specific chat
+const getChatDatabase = async (chatId) => {
+  try {
+    // Disconnect from current database if connected
+    if (mongoose.connection.readyState === 1) {
+      await mongoose.disconnect();
+    }
+    
+    // Connect to chat-specific database
+    await connectWithRetry(chatId);
+    
+    // Recreate indexes for the new database
+    await User.collection.dropIndexes().catch(() => {});
+    await User.collection.createIndex({ telegramId: 1, chatId: 1 }, { unique: true });
+    
+    return User;
+  } catch (err) {
+    console.error('Error setting up chat database:', err);
+    throw err;
+  }
+};
 
 // Sticker credit values
 const STICKER_CREDITS = {
@@ -157,8 +176,11 @@ bot.onText(/\/start/, async (msg) => {
       username
     });
 
+    // Get chat-specific database
+    const ChatUser = await getChatDatabase(chatId.toString());
+
     // Check if user already exists
-    let user = await User.findOne({ 
+    let user = await ChatUser.findOne({ 
       telegramId: userId.toString(),
       chatId: chatId.toString()
     });
@@ -167,7 +189,7 @@ bot.onText(/\/start/, async (msg) => {
 
     if (!user) {
       // Create new user
-      user = new User({
+      user = new ChatUser({
         telegramId: userId.toString(),
         chatId: chatId.toString(),
         username: username,
@@ -196,8 +218,11 @@ bot.onText(/\/leaderboard/, async (msg) => {
   try {
     const chatId = msg.chat.id;
     
+    // Get chat-specific database
+    const ChatUser = await getChatDatabase(chatId.toString());
+    
     // Get top 10 users for this chat
-    const topUsers = await User.find({ chatId: chatId.toString() })
+    const topUsers = await ChatUser.find({ chatId: chatId.toString() })
       .sort({ creditScore: -1 })
       .limit(10);
 
@@ -232,8 +257,11 @@ bot.onText(/\/score/, async (msg) => {
       username: msg.from.username || msg.from.first_name
     });
 
+    // Get chat-specific database
+    const ChatUser = await getChatDatabase(chatId.toString());
+
     // Find user's score
-    const user = await User.findOne({ 
+    const user = await ChatUser.findOne({ 
       telegramId: userId.toString(),
       chatId: chatId.toString()
     });
@@ -353,14 +381,17 @@ bot.on('sticker', async (msg) => {
 
     // Check if this is a credit score sticker
     if (STICKER_CREDITS[stickerId]) {
+      // Get chat-specific database
+      const ChatUser = await getChatDatabase(chatId.toString());
+
       // Find the user to update
-      let user = await User.findOne({ 
+      let user = await ChatUser.findOne({ 
         telegramId: targetUserId,
         chatId: chatId.toString()
       });
 
       if (!user) {
-        user = new User({
+        user = new ChatUser({
           telegramId: targetUserId,
           chatId: chatId.toString(),
           username: targetUsername,
@@ -374,7 +405,7 @@ bot.on('sticker', async (msg) => {
       await user.save();
 
       // Get user's new position
-      const position = await User.countDocuments({
+      const position = await ChatUser.countDocuments({
         chatId: chatId.toString(),
         creditScore: { $gt: user.creditScore }
       }) + 1;
