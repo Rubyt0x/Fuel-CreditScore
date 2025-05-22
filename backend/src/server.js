@@ -145,18 +145,55 @@ bot.setMyCommands([
   console.error('Error setting bot commands:', error);
 });
 
-// Handle /start command
+// Debug: Log all messages with more detail
+bot.on('message', (msg) => {
+  console.log('Received message:', {
+    type: msg.type,
+    chat: {
+      id: msg.chat.id,
+      type: msg.chat.type,
+      title: msg.chat.title
+    },
+    from: {
+      id: msg.from.id,
+      username: msg.from.username,
+      first_name: msg.from.first_name
+    },
+    text: msg.text,
+    sticker: msg.sticker ? {
+      file_id: msg.sticker.file_id,
+      emoji: msg.sticker.emoji,
+      set_name: msg.sticker.set_name
+    } : null
+  });
+
+  // Log if it's a command
+  if (msg.text && msg.text.startsWith('/')) {
+    console.log('Command received:', msg.text);
+  }
+});
+
+// Handle /start command with more logging
 bot.onText(/\/start/, async (msg) => {
+  console.log('Start command handler triggered');
   try {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     const username = msg.from.first_name || msg.from.username;
+
+    console.log('Processing start command:', {
+      chatId,
+      userId,
+      username
+    });
 
     // Check if user already exists
     let user = await User.findOne({ 
       telegramId: userId.toString(),
       chatId: chatId.toString()
     });
+
+    console.log('User lookup result:', user);
 
     if (!user) {
       // Create new user
@@ -167,12 +204,19 @@ bot.onText(/\/start/, async (msg) => {
         creditScore: 0
       });
       await user.save();
+      console.log('New user created:', user);
       await bot.sendMessage(chatId, `👋 Welcome ${username}! You've been registered in the Fuel Credit Score system. Your initial score is 0.`);
     } else {
+      console.log('Existing user found:', user);
       await bot.sendMessage(chatId, `👋 Hey fren ${username}! Your current credit score is ${user.creditScore}.`);
     }
   } catch (err) {
     console.error('Error handling /start command:', err);
+    console.error('Error details:', {
+      message: err.message,
+      stack: err.stack,
+      name: err.name
+    });
     await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error processing your request. Please try again later.");
   }
 });
@@ -242,29 +286,6 @@ bot.onText(/\/score/, async (msg) => {
     });
     await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error fetching your score. Please try again later.");
   }
-});
-
-// Debug: Log all messages with more detail
-bot.on('message', (msg) => {
-  console.log('Received message:', {
-    type: msg.type,
-    chat: {
-      id: msg.chat.id,
-      type: msg.chat.type,
-      title: msg.chat.title
-    },
-    from: {
-      id: msg.from.id,
-      username: msg.from.username,
-      first_name: msg.from.first_name
-    },
-    text: msg.text,
-    sticker: msg.sticker ? {
-      file_id: msg.sticker.file_id,
-      emoji: msg.sticker.emoji,
-      set_name: msg.sticker.set_name
-    } : null
-  });
 });
 
 // Debug: Log sticker information with more detail
@@ -369,9 +390,24 @@ bot.on('message_reaction', async (msg) => {
   }
 });
 
-// Add error handler
+// Add error handler with more detail
 bot.on('error', (error) => {
-  console.error('Bot error:', error);
+  console.error('Bot error:', {
+    message: error.message,
+    stack: error.stack,
+    name: error.name,
+    code: error.code
+  });
+});
+
+// Add webhook error handler
+app.use((err, req, res, next) => {
+  console.error('Webhook error:', {
+    message: err.message,
+    stack: err.stack,
+    name: err.name
+  });
+  res.status(500).send('Internal Server Error');
 });
 
 app.listen(port, () => {
