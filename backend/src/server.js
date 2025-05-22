@@ -97,44 +97,14 @@ User.collection.dropIndexes().then(() => {
 
 // Sticker credit values
 const STICKER_CREDITS = {
-  'CAACAgQAAyEFAASg28saAAMGaB32UymgiQTGbVE0BpSniAqLg-kAAnYZAAKd5PFQFEAlUp3q1aM2BA': 20,  // Add 20 points
-  'CAACAgQAAyEFAASg28saAAMLaB33YRqT3aY0WJq1j3JujLr_MokAAmwYAALVfPFQvaBMA18SdHI2BA': -20  // Subtract 20 points
+  'CAACAgQAAxkBAAMJaC70UAGyYccTdJN7kWwcqpgD7ScAAnYZAAKd5PFQFEAlUp3q1aM2BA': 20,  // Add 20 points (👍)
+  'CAACAgQAAxkBAAMYaC71bUrHYlMTtCvKe7AJUTvccqsAAmwYAALVfPFQvaBMA18SdHI2BA': -20  // Subtract 20 points (👎)
 };
 
 // Telegram Bot setup
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { 
-  polling: false // Disable polling completely
+  polling: true // Enable polling for development
 });
-
-// Webhook setup
-const setupWebhook = async () => {
-  try {
-    const webhookUrl = `https://fuel-creditscore.onrender.com/bot${process.env.TELEGRAM_BOT_TOKEN}`;
-    console.log('Setting up webhook with URL:', webhookUrl);
-    
-    // Delete any existing webhook first
-    await bot.deleteWebHook();
-    console.log('Deleted existing webhook');
-    
-    // Set up the new webhook
-    await bot.setWebHook(webhookUrl, {
-      allowed_updates: ['message', 'callback_query', 'message_reaction', 'sticker'],
-      drop_pending_updates: true // Ignore any updates that happened while webhook was not set
-    });
-    
-    console.log('Webhook set successfully');
-
-    // Verify webhook info
-    const webhookInfo = await bot.getWebHookInfo();
-    console.log('Webhook info:', webhookInfo);
-  } catch (err) {
-    console.error('Error setting up webhook:', err);
-    process.exit(1); // Exit if webhook setup fails
-  }
-};
-
-// Set up webhook when the server starts
-setupWebhook();
 
 // Set up bot commands
 bot.setMyCommands([
@@ -145,7 +115,7 @@ bot.setMyCommands([
   console.error('Error setting bot commands:', error);
 });
 
-// Debug: Log all messages with more detail
+// Debug: Log all messages
 bot.on('message', (msg) => {
   console.log('Received message:', {
     type: msg.type,
@@ -312,6 +282,117 @@ bot.on('sticker', (msg) => {
       file_size: msg.sticker.file_size
     }
   });
+});
+
+// Helper function to get emoji based on score
+const getScoreEmoji = (score) => {
+  if (score > 100) return '🏅';  // Champion
+  if (score > 50) return '🥇';   // Gold
+  if (score > 0) return '🎯';    // Target
+  if (score < -50) return '⚠️';  // Warning
+  return '😅';                   // Struggling
+};
+
+// Helper function to get fun comment based on score and position
+const getFunComment = (score, position) => {
+  if (position === 1) {
+    return "The most trusted citizen in the group!";
+  } else if (position === 2) {
+    return "Almost worthy of the highest privileges!";
+  } else if (position === 3) {
+    return "Still considered a model citizen!";
+  } else if (score > 100) {
+    return "Your loyalty to the group is unquestionable!";
+  } else if (score > 50) {
+    return "Your social standing is quite respectable!";
+  } else if (score > 0) {
+    return "Your behavior is... acceptable.";
+  } else if (score > -50) {
+    return "Your social credit needs improvement...";
+  } else {
+    return "Your behavior is being closely monitored!";
+  }
+};
+
+// Handle sticker messages
+bot.on('sticker', async (msg) => {
+  try {
+    const chatId = msg.chat.id;
+    const stickerId = msg.sticker.file_id;
+
+    // Check if this is a reply to another message
+    if (!msg.reply_to_message) {
+      await bot.sendMessage(chatId, "❌ Please reply to someone's message with the sticker to change their score!");
+      return;
+    }
+
+    const targetUserId = msg.reply_to_message.from.id.toString();
+    const targetUsername = msg.reply_to_message.from.first_name.split('|')[0].trim() || msg.reply_to_message.from.username;
+    const senderId = msg.from.id.toString();
+
+    console.log('Processing sticker:', {
+      chatId,
+      targetUserId,
+      targetUsername,
+      senderId,
+      stickerId,
+      credits: STICKER_CREDITS[stickerId]
+    });
+
+    // Prevent self-voting
+    if (senderId === targetUserId) {
+      await bot.sendMessage(chatId, "❌ You can't change your own score!");
+      return;
+    }
+
+    // Prevent bot scoring
+    if (msg.reply_to_message.from.is_bot) {
+      await bot.sendMessage(chatId, "❌ Bots can't receive credit scores!");
+      return;
+    }
+
+    // Check if this is a credit score sticker
+    if (STICKER_CREDITS[stickerId]) {
+      // Find the user to update
+      let user = await User.findOne({ 
+        telegramId: targetUserId,
+        chatId: chatId.toString()
+      });
+
+      if (!user) {
+        user = new User({
+          telegramId: targetUserId,
+          chatId: chatId.toString(),
+          username: targetUsername,
+          creditScore: 0
+        });
+      }
+
+      // Update score
+      const oldScore = user.creditScore;
+      user.creditScore += STICKER_CREDITS[stickerId];
+      await user.save();
+
+      // Get user's new position
+      const position = await User.countDocuments({
+        chatId: chatId.toString(),
+        creditScore: { $gt: user.creditScore }
+      }) + 1;
+
+      // Get fun comment
+      const comment = getFunComment(user.creditScore, position);
+
+      // Send confirmation message
+      const emoji = getScoreEmoji(user.creditScore);
+      await bot.sendMessage(
+        chatId,
+        `${emoji} ${targetUsername}'s credit score changed from ${oldScore} to ${user.creditScore}\n${comment}`
+      );
+    }
+  } catch (err) {
+    console.error('Error handling sticker:', err);
+    await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error processing your sticker. Please try again later.");
+  }
 });
 
 // Handle sticker reactions
