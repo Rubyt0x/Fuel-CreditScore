@@ -114,6 +114,7 @@ const setupWebhook = async () => {
     
     // Delete any existing webhook first
     await bot.deleteWebHook();
+    console.log('Deleted existing webhook');
     
     // Set up the new webhook
     await bot.setWebHook(webhookUrl, {
@@ -122,6 +123,10 @@ const setupWebhook = async () => {
     });
     
     console.log('Webhook set successfully');
+
+    // Verify webhook info
+    const webhookInfo = await bot.getWebHookInfo();
+    console.log('Webhook info:', webhookInfo);
   } catch (err) {
     console.error('Error setting up webhook:', err);
     process.exit(1); // Exit if webhook setup fails
@@ -239,22 +244,52 @@ bot.onText(/\/score/, async (msg) => {
   }
 });
 
-// Debug: Log all messages
+// Debug: Log all messages with more detail
 bot.on('message', (msg) => {
-  console.log('Received message:', JSON.stringify(msg, null, 2));
+  console.log('Received message:', {
+    type: msg.type,
+    chat: {
+      id: msg.chat.id,
+      type: msg.chat.type,
+      title: msg.chat.title
+    },
+    from: {
+      id: msg.from.id,
+      username: msg.from.username,
+      first_name: msg.from.first_name
+    },
+    text: msg.text,
+    sticker: msg.sticker ? {
+      file_id: msg.sticker.file_id,
+      emoji: msg.sticker.emoji,
+      set_name: msg.sticker.set_name
+    } : null
+  });
 });
 
-// Debug: Log sticker information
+// Debug: Log sticker information with more detail
 bot.on('sticker', (msg) => {
   console.log('Sticker received:', {
-    file_id: msg.sticker.file_id,
-    emoji: msg.sticker.emoji,
-    set_name: msg.sticker.set_name,
-    is_animated: msg.sticker.is_animated,
-    is_video: msg.sticker.is_video,
-    width: msg.sticker.width,
-    height: msg.sticker.height,
-    file_size: msg.sticker.file_size
+    chat: {
+      id: msg.chat.id,
+      type: msg.chat.type,
+      title: msg.chat.title
+    },
+    from: {
+      id: msg.from.id,
+      username: msg.from.username,
+      first_name: msg.from.first_name
+    },
+    sticker: {
+      file_id: msg.sticker.file_id,
+      emoji: msg.sticker.emoji,
+      set_name: msg.sticker.set_name,
+      is_animated: msg.sticker.is_animated,
+      is_video: msg.sticker.is_video,
+      width: msg.sticker.width,
+      height: msg.sticker.height,
+      file_size: msg.sticker.file_size
+    }
   });
 });
 
@@ -332,6 +367,11 @@ bot.on('message_reaction', async (msg) => {
     console.error('Error handling reaction:', err);
     await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error processing your reaction. Please try again later.");
   }
+});
+
+// Add error handler
+bot.on('error', (error) => {
+  console.error('Bot error:', error);
 });
 
 app.listen(port, () => {
