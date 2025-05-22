@@ -117,7 +117,7 @@ const setupWebhook = async () => {
     
     // Set up the new webhook
     await bot.setWebHook(webhookUrl, {
-      allowed_updates: ['message', 'callback_query', 'message_reaction'],
+      allowed_updates: ['message', 'callback_query', 'message_reaction', 'sticker'],
       drop_pending_updates: true // Ignore any updates that happened while webhook was not set
     });
     
@@ -242,6 +242,20 @@ bot.onText(/\/score/, async (msg) => {
 // Debug: Log all messages
 bot.on('message', (msg) => {
   console.log('Received message:', JSON.stringify(msg, null, 2));
+});
+
+// Debug: Log sticker information
+bot.on('sticker', (msg) => {
+  console.log('Sticker received:', {
+    file_id: msg.sticker.file_id,
+    emoji: msg.sticker.emoji,
+    set_name: msg.sticker.set_name,
+    is_animated: msg.sticker.is_animated,
+    is_video: msg.sticker.is_video,
+    width: msg.sticker.width,
+    height: msg.sticker.height,
+    file_size: msg.sticker.file_size
+  });
 });
 
 // Handle sticker reactions
