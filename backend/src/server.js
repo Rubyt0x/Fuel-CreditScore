@@ -213,107 +213,109 @@ bot.onText(/\/leaderboard/, async (msg) => {
   }
 });
 
+// Handle /score command
+bot.onText(/\/score/, async (msg) => {
+  try {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+
+    // Find user's score
+    const user = await User.findOne({ 
+      telegramId: userId.toString(),
+      chatId: chatId.toString()
+    });
+
+    if (!user) {
+      await bot.sendMessage(chatId, "❌ You haven't registered yet. Use /start to register!");
+      return;
+    }
+
+    const emoji = getScoreEmoji(user.creditScore);
+    await bot.sendMessage(chatId, `${emoji} Your current credit score is: ${user.creditScore} points`);
+  } catch (err) {
+    console.error('Error handling /score command:', err);
+    await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error fetching your score. Please try again later.");
+  }
+});
+
 // Debug: Log all messages
 bot.on('message', (msg) => {
   console.log('Received message:', JSON.stringify(msg, null, 2));
 });
 
 // Handle sticker reactions
-bot.on('message', async (msg) => {
-  if (msg.reply_to_message && msg.sticker) {
-    try {
-      const stickerId = msg.sticker.file_id;
-      const creditChange = STICKER_CREDITS[stickerId];
-      
-      if (creditChange) {
-        const targetUserId = msg.reply_to_message.from.id.toString();
-        const targetUsername = msg.reply_to_message.from.first_name || msg.reply_to_message.from.username;
-        const senderId = msg.from.id.toString();
-        const senderName = msg.from.first_name || msg.from.username;
-        const chatId = msg.chat.id.toString();
-        
-        // Check if target is a bot
-        if (msg.reply_to_message.from.is_bot) {
-          await bot.sendMessage(msg.chat.id, "🤖 *beep boop* I'm just a bot, I can't receive credit scores! *beep boop*");
-          return;
-        }
+bot.on('message_reaction', async (msg) => {
+  try {
+    // Get the message that was reacted to
+    const message = await bot.getChat(msg.chat.id).then(chat => 
+      bot.getChatHistory(chat.id, { limit: 1, offset: -1 })
+    ).then(history => history[0]);
 
-        // Check if user is trying to change their own score
-        if (targetUserId === senderId) {
-          await bot.sendMessage(msg.chat.id, "🚫 Sorry, you can't change your own credit score! The Party requires impartial evaluation.");
-          return;
-        }
-
-        try {
-          // Try to find existing user first
-          let user = await User.findOne({ 
-            telegramId: targetUserId,
-            chatId: chatId
-          });
-
-          if (!user) {
-            // Create new user if not found
-            user = new User({
-              telegramId: targetUserId,
-              chatId: chatId,
-              username: targetUsername,
-              creditScore: creditChange
-            });
-            await user.save();
-          } else {
-            // Update existing user's score
-            user.creditScore += creditChange;
-            await user.save();
-          }
-
-          // Create fun messages based on score change
-          let message;
-          if (creditChange > 0) {
-            const positiveMessages = [
-              `⛽️ ${targetUsername} just gained ${creditChange} social credit points from ${senderName}! They're on their way to becoming a model citizen!`,
-              `🪓 ${targetUsername} earned ${creditChange} social credit points from ${senderName}! Nick is pleased with your contribution!`,
-              `🏎️ ${targetUsername} received ${creditChange} social credit points from ${senderName}! Your loyalty to The Fuel has been noted!`,
-              `🔥 ${targetUsername} gained ${creditChange} social credit points from ${senderName}! Nick smiles upon you!`
-            ];
-            message = positiveMessages[Math.floor(Math.random() * positiveMessages.length)];
-          } else {
-            const negativeMessages = [
-              `😡 ${targetUsername} lost ${Math.abs(creditChange)} social credit points due to ${senderName}! Nick is disappointed...`,
-              `😔 ${targetUsername} had ${Math.abs(creditChange)} social credit points deducted by ${senderName}! Better luck next time!`,
-              `📉 ${targetUsername} lost ${Math.abs(creditChange)} social credit points because of ${senderName}! Nick expects better behavior!`,
-              `🚫 ${targetUsername} had ${Math.abs(creditChange)} social credit points removed by ${senderName}! This is not the way of The Fuel!`
-            ];
-            message = negativeMessages[Math.floor(Math.random() * negativeMessages.length)];
-          }
-          
-          message += `\n\nCurrent social credit: ${user.creditScore}`;
-           
-          // Add emoji based on score
-          if (user.creditScore > 100) {
-            message += ' ⛽️';
-          } else if (user.creditScore > 50) {
-            message += ' 🪓';
-          } else if (user.creditScore > 0) {
-            message += ' 🎯';
-          } else if (user.creditScore < -50) {
-            message += ' ⚠️';
-          } else if (user.creditScore < 0) {
-            message += ' 😅';
-          }
-
-          await bot.sendMessage(msg.chat.id, message, {
-            reply_to_message_id: msg.message_id,
-            parse_mode: 'Markdown'
-          });
-        } catch (err) {
-          console.error('Error updating credit score:', err);
-          await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error updating your credit score. Please try again later.");
-        }
-      }
-    } catch (err) {
-      console.error('Error handling sticker reaction:', err);
-      await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error handling the sticker reaction. Please try again later.");
+    if (!message) {
+      console.log('No message found for reaction');
+      return;
     }
+
+    const messageAuthorId = message.from.id.toString();
+    const messageAuthor = message.from;
+    const reactorId = msg.from.id.toString();
+    const chatId = msg.chat.id;
+
+    // Debug logs
+    console.log('Reaction details:', {
+      messageAuthorId,
+      reactorId,
+      chatId,
+      isBot: messageAuthor.is_bot,
+      reaction: msg.reaction
+    });
+
+    // Prevent self-voting
+    if (reactorId === messageAuthorId) {
+      await bot.sendMessage(chatId, "❌ You can't change your own score!");
+      return;
+    }
+
+    // Prevent bot scoring
+    if (messageAuthor.is_bot) {
+      await bot.sendMessage(chatId, "❌ Bots can't receive credit scores!");
+      return;
+    }
+
+    // Find or create user
+    let user = await User.findOne({ 
+      telegramId: messageAuthorId,
+      chatId: chatId.toString()
+    });
+
+    if (!user) {
+      user = new User({
+        telegramId: messageAuthorId,
+        chatId: chatId.toString(),
+        username: messageAuthor.first_name || messageAuthor.username,
+        creditScore: 0
+      });
+    }
+
+    // Update score based on reaction
+    const oldScore = user.creditScore;
+    if (msg.reaction[0].emoji === '👍') {
+      user.creditScore += 20;
+    } else if (msg.reaction[0].emoji === '👎') {
+      user.creditScore -= 20;
+    }
+
+    await user.save();
+
+    // Send confirmation message
+    const emoji = getScoreEmoji(user.creditScore);
+    await bot.sendMessage(
+      chatId,
+      `${emoji} ${user.username}'s credit score changed from ${oldScore} to ${user.creditScore}`
+    );
+  } catch (err) {
+    console.error('Error handling reaction:', err);
+    await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error processing your reaction. Please try again later.");
   }
 });
 
