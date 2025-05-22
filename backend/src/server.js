@@ -108,7 +108,8 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
     autoStart: true,
     params: {
       timeout: 10,
-      allowed_updates: ['message', 'callback_query']
+      allowed_updates: ['message', 'callback_query', 'message_reaction'],
+      offset: -1 // Start from the latest update
     }
   }
 });
@@ -131,7 +132,8 @@ bot.on('polling_error', (error) => {
           autoStart: true,
           params: {
             timeout: 10,
-            allowed_updates: ['message', 'callback_query']
+            allowed_updates: ['message', 'callback_query', 'message_reaction'],
+            offset: -1 // Start from the latest update
           }
         }).catch(err => {
           console.error('Error restarting polling:', err);
