@@ -100,21 +100,44 @@ const STICKER_CREDITS = {
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { 
   polling: {
     interval: 300,
-    autoStart: false
+    autoStart: false,
+    params: {
+      timeout: 10
+    }
   }
 });
 
+let isPolling = false;
+let retryCount = 0;
+const MAX_RETRIES = 5;
+const RETRY_DELAY = 5000;
+
 // Start polling with error handling
 const startPolling = async () => {
+  if (isPolling) {
+    console.log('Polling already in progress, skipping...');
+    return;
+  }
+
   try {
+    isPolling = true;
     await bot.stopPolling();
     await bot.startPolling();
     console.log('Bot polling started successfully');
+    retryCount = 0; // Reset retry count on successful start
   } catch (err) {
     console.error('Error starting bot polling:', err);
+    isPolling = false;
+    
     if (err.message.includes('terminated by other getUpdates request')) {
-      console.log('Another instance is running. Waiting 5 seconds before retrying...');
-      setTimeout(startPolling, 5000);
+      if (retryCount < MAX_RETRIES) {
+        retryCount++;
+        console.log(`Retry attempt ${retryCount}/${MAX_RETRIES}. Waiting ${RETRY_DELAY/1000} seconds...`);
+        setTimeout(startPolling, RETRY_DELAY);
+      } else {
+        console.error('Max retries reached. Please check if another instance is running.');
+        process.exit(1);
+      }
     }
   }
 };
@@ -122,12 +145,14 @@ const startPolling = async () => {
 // Handle process termination
 process.on('SIGINT', async () => {
   console.log('Stopping bot polling...');
+  isPolling = false;
   await bot.stopPolling();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('Stopping bot polling...');
+  isPolling = false;
   await bot.stopPolling();
   process.exit(0);
 });
