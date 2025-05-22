@@ -103,46 +103,15 @@ const STICKER_CREDITS = {
 
 // Telegram Bot setup
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { 
-  polling: {
-    interval: 300,
-    autoStart: true,
-    params: {
-      timeout: 10,
-      allowed_updates: ['message', 'callback_query', 'message_reaction'],
-      offset: -1 // Start from the latest update
-    }
-  }
+  polling: false // Disable polling completely
 });
 
-// Handle polling errors
-bot.on('polling_error', (error) => {
-  console.error('Polling error:', error);
-  
-  // If it's a conflict error, try to restart polling with a delay
-  if (error.code === 'ETELEGRAM' && error.message.includes('409 Conflict')) {
-    console.log('Polling conflict detected. Restarting polling in 5 seconds...');
-    
-    // Stop polling
-    bot.stopPolling().then(() => {
-      // Wait 5 seconds before restarting
-      setTimeout(() => {
-        console.log('Restarting polling...');
-        bot.startPolling({
-          interval: 300,
-          autoStart: true,
-          params: {
-            timeout: 10,
-            allowed_updates: ['message', 'callback_query', 'message_reaction'],
-            offset: -1 // Start from the latest update
-          }
-        }).catch(err => {
-          console.error('Error restarting polling:', err);
-        });
-      }, 5000);
-    }).catch(err => {
-      console.error('Error stopping polling:', err);
-    });
-  }
+// Set up webhook for production
+const webhookUrl = `${process.env.WEBHOOK_URL}/bot${process.env.TELEGRAM_BOT_TOKEN}`;
+bot.setWebHook(webhookUrl).then(() => {
+  console.log('Webhook set successfully:', webhookUrl);
+}).catch(err => {
+  console.error('Error setting webhook:', err);
 });
 
 // Set up bot commands
