@@ -107,12 +107,29 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
 });
 
 // Set up webhook for production
-const webhookUrl = `${process.env.WEBHOOK_URL}/bot${process.env.TELEGRAM_BOT_TOKEN}`;
-bot.setWebHook(webhookUrl).then(() => {
-  console.log('Webhook set successfully:', webhookUrl);
-}).catch(err => {
-  console.error('Error setting webhook:', err);
-});
+const setupWebhook = async () => {
+  try {
+    if (!process.env.WEBHOOK_URL) {
+      throw new Error('WEBHOOK_URL environment variable is not set');
+    }
+
+    // Ensure the webhook URL is properly formatted
+    const webhookUrl = process.env.WEBHOOK_URL.endsWith('/') 
+      ? `${process.env.WEBHOOK_URL}bot${process.env.TELEGRAM_BOT_TOKEN}`
+      : `${process.env.WEBHOOK_URL}/bot${process.env.TELEGRAM_BOT_TOKEN}`;
+
+    console.log('Attempting to set webhook with URL:', webhookUrl);
+    
+    await bot.setWebHook(webhookUrl);
+    console.log('Webhook set successfully');
+  } catch (err) {
+    console.error('Error setting webhook:', err);
+    console.error('Please ensure WEBHOOK_URL is set correctly in your environment variables');
+    console.error('WEBHOOK_URL should be your Render app\'s public URL (e.g., https://your-app.onrender.com)');
+  }
+};
+
+setupWebhook();
 
 // Set up bot commands
 bot.setMyCommands([
