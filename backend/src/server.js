@@ -103,21 +103,33 @@ const STICKER_CREDITS = {
 
 // Telegram Bot setup
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { 
-  polling: {
-    interval: 300,
-    autoStart: true,
-    params: {
-      timeout: 10,
-      allowed_updates: ['message', 'callback_query', 'message_reaction'],
-      offset: -1 // Start from the latest update
-    }
-  }
+  polling: false // Disable polling completely
 });
 
-// Handle polling errors
-bot.on('polling_error', (error) => {
-  console.error('Polling error:', error);
-});
+// Webhook setup
+const setupWebhook = async () => {
+  try {
+    const webhookUrl = `https://fuel-creditscore.onrender.com/bot${process.env.TELEGRAM_BOT_TOKEN}`;
+    console.log('Setting up webhook with URL:', webhookUrl);
+    
+    // Delete any existing webhook first
+    await bot.deleteWebHook();
+    
+    // Set up the new webhook
+    await bot.setWebHook(webhookUrl, {
+      allowed_updates: ['message', 'callback_query', 'message_reaction'],
+      drop_pending_updates: true // Ignore any updates that happened while webhook was not set
+    });
+    
+    console.log('Webhook set successfully');
+  } catch (err) {
+    console.error('Error setting up webhook:', err);
+    process.exit(1); // Exit if webhook setup fails
+  }
+};
+
+// Set up webhook when the server starts
+setupWebhook();
 
 // Set up bot commands
 bot.setMyCommands([
