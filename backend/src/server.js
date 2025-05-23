@@ -383,6 +383,12 @@ bot.on('sticker', async (msg) => {
     const chatId = msg.chat.id;
     const stickerId = msg.sticker.file_id;
 
+    // Check if this is a credit score sticker first
+    if (!STICKER_CREDITS[stickerId]) {
+      // Silently ignore non-credit score stickers
+      return;
+    }
+
     // Check if this is a reply to another message
     if (!msg.reply_to_message) {
       await bot.sendMessage(chatId, "❌ Please reply to someone's message with the sticker to change their score!");
@@ -392,6 +398,12 @@ bot.on('sticker', async (msg) => {
     const targetUserId = msg.reply_to_message.from.id.toString();
     const targetUsername = msg.reply_to_message.from.first_name.split('|')[0].trim() || msg.reply_to_message.from.username;
     const senderId = msg.from.id.toString();
+
+    // Prevent votes from user ID 777000
+    if (senderId === '777000') {
+      console.log('Vote from user 777000 ignored');
+      return;
+    }
 
     console.log('Processing sticker:', {
       chatId,
@@ -414,47 +426,44 @@ bot.on('sticker', async (msg) => {
       return;
     }
 
-    // Check if this is a credit score sticker
-    if (STICKER_CREDITS[stickerId]) {
-      // Get chat-specific collection
-      const ChatUsers = getChatCollection(chatId.toString());
+    // Get chat-specific collection
+    const ChatUsers = getChatCollection(chatId.toString());
 
-      // Find the user to update
-      let user = await ChatUsers.findOne({ 
+    // Find the user to update
+    let user = await ChatUsers.findOne({ 
+      telegramId: targetUserId,
+      chatId: chatId.toString()
+    });
+
+    if (!user) {
+      user = new ChatUsers({
         telegramId: targetUserId,
-        chatId: chatId.toString()
-      });
-
-      if (!user) {
-        user = new ChatUsers({
-          telegramId: targetUserId,
-          chatId: chatId.toString(),
-          username: targetUsername,
-          creditScore: 0
-        });
-      }
-
-      // Update score
-      const oldScore = user.creditScore;
-      user.creditScore += STICKER_CREDITS[stickerId];
-      await user.save();
-
-      // Get user's new position
-      const position = await ChatUsers.countDocuments({
         chatId: chatId.toString(),
-        creditScore: { $gt: user.creditScore }
-      }) + 1;
-
-      // Get fun comment
-      const comment = getFunComment(user.creditScore, position);
-
-      // Send confirmation message
-      const emoji = getScoreEmoji(user.creditScore);
-      await bot.sendMessage(
-        chatId,
-        `${emoji} ${targetUsername}'s credit score changed from ${oldScore} to ${user.creditScore}\n${comment}`
-      );
+        username: targetUsername,
+        creditScore: 0
+      });
     }
+
+    // Update score
+    const oldScore = user.creditScore;
+    user.creditScore += STICKER_CREDITS[stickerId];
+    await user.save();
+
+    // Get user's new position
+    const position = await ChatUsers.countDocuments({
+      chatId: chatId.toString(),
+      creditScore: { $gt: user.creditScore }
+    }) + 1;
+
+    // Get fun comment
+    const comment = getFunComment(user.creditScore, position);
+
+    // Send confirmation message
+    const emoji = getScoreEmoji(user.creditScore);
+    await bot.sendMessage(
+      chatId,
+      `${emoji} ${targetUsername}'s credit score changed from ${oldScore} to ${user.creditScore}\n${comment}`
+    );
   } catch (err) {
     console.error('Error handling sticker:', err);
     await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error processing your sticker. Please try again later.");
@@ -478,6 +487,12 @@ bot.on('message_reaction', async (msg) => {
     const messageAuthor = message.from;
     const reactorId = msg.from.id.toString();
     const chatId = msg.chat.id;
+
+    // Prevent votes from user ID 777000
+    if (reactorId === '777000') {
+      console.log('Reaction from user 777000 ignored');
+      return;
+    }
 
     // Debug logs
     console.log('Reaction details:', {
