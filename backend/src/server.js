@@ -93,7 +93,9 @@ const getChatCollection = (chatId) => {
 // Sticker credit values
 const STICKER_CREDITS = {
   'CAACAgQAAxkBAAMJaC70UAGyYccTdJN7kWwcqpgD7ScAAnYZAAKd5PFQFEAlUp3q1aM2BA': 20,  // Add 20 points (👍)
-  'CAACAgQAAxkBAAMYaC71bUrHYlMTtCvKe7AJUTvccqsAAmwYAALVfPFQvaBMA18SdHI2BA': -20  // Subtract 20 points (👎)
+  'CAACAgQAAxkBAAMYaC71bUrHYlMTtCvKe7AJUTvccqsAAmwYAALVfPFQvaBMA18SdHI2BA': -20,  // Subtract 20 points (👎)
+  'CAACAgQAAyEFAASNsb1cAAEB1DxoR1ywgXya5nIdzlKZWFIuWMkFbgACdhkAAp3k8VAUQCVSnerVozYE': 20, // Add 20 points (👍 new)
+  'CAACAgQAAyEFAASNsb1cAAEB065oR0CEpiUng5nVfWQnyAb6230kngACbBgAAtV88VC9oEwDXxJ0cjYE': -20 // Subtract 20 points (👎 new)
 };
 
 // Telegram Bot setup
