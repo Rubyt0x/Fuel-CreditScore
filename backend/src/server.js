@@ -386,18 +386,22 @@ bot.on('sticker', async (msg) => {
   try {
     const chatId = msg.chat.id;
     const stickerId = msg.sticker.file_id;
+    console.log('[Sticker Handler] Received sticker:', stickerId);
 
     // Check if this is a credit score sticker first
     if (!STICKER_CREDITS[stickerId]) {
-      // Silently ignore non-credit score stickers
+      console.log('[Sticker Handler] Sticker not in STICKER_CREDITS, ignoring.');
       return;
     }
+    console.log('[Sticker Handler] Sticker is in STICKER_CREDITS.');
 
     // Check if this is a reply to another message
     if (!msg.reply_to_message) {
+      console.log('[Sticker Handler] Not a reply, sending warning.');
       await bot.sendMessage(chatId, "❌ Please reply to someone's message with the sticker to change their score!");
       return;
     }
+    console.log('[Sticker Handler] Is a reply.');
 
     const targetUserId = msg.reply_to_message.from.id.toString();
     const targetUsername = msg.reply_to_message.from.first_name.split('|')[0].trim() || msg.reply_to_message.from.username;
@@ -405,30 +409,26 @@ bot.on('sticker', async (msg) => {
 
     // Prevent votes from user ID 777000
     if (senderId === '777000') {
-      console.log('Vote from user 777000 ignored');
+      console.log('[Sticker Handler] Vote from user 777000 ignored');
       return;
     }
-
-    console.log('Processing sticker:', {
-      chatId,
-      targetUserId,
-      targetUsername,
-      senderId,
-      stickerId,
-      credits: STICKER_CREDITS[stickerId]
-    });
+    console.log('[Sticker Handler] Sender is not 777000.');
 
     // Prevent self-voting
     if (senderId === targetUserId) {
+      console.log('[Sticker Handler] Self-vote detected, sending warning.');
       await bot.sendMessage(chatId, "❌ You can't change your own score!");
       return;
     }
+    console.log('[Sticker Handler] Not a self-vote.');
 
     // Prevent bot scoring
     if (msg.reply_to_message.from.is_bot) {
+      console.log('[Sticker Handler] Target is a bot, sending warning.');
       await bot.sendMessage(chatId, "❌ Bots can't receive credit scores!");
       return;
     }
+    console.log('[Sticker Handler] Target is not a bot.');
 
     // Get chat-specific collection
     const ChatUsers = getChatCollection(chatId.toString());
@@ -438,6 +438,7 @@ bot.on('sticker', async (msg) => {
       telegramId: targetUserId,
       chatId: chatId.toString()
     });
+    console.log('[Sticker Handler] User lookup result:', user);
 
     if (!user) {
       user = new ChatUsers({
@@ -446,28 +447,34 @@ bot.on('sticker', async (msg) => {
         username: targetUsername,
         creditScore: 0
       });
+      console.log('[Sticker Handler] Created new user:', user);
     }
 
     // Update score
     const oldScore = user.creditScore;
     user.creditScore += STICKER_CREDITS[stickerId];
     await user.save();
+    console.log('[Sticker Handler] Updated user score:', { oldScore, newScore: user.creditScore });
 
     // Get user's new position
     const position = await ChatUsers.countDocuments({
       chatId: chatId.toString(),
       creditScore: { $gt: user.creditScore }
     }) + 1;
+    console.log('[Sticker Handler] User position:', position);
 
     // Get fun comment
     const comment = getFunComment(user.creditScore, position);
+    console.log('[Sticker Handler] Fun comment:', comment);
 
     // Send confirmation message
     const emoji = getScoreEmoji(user.creditScore);
+    console.log('[Sticker Handler] About to send confirmation message', { oldScore, newScore: user.creditScore, targetUsername });
     await bot.sendMessage(
       chatId,
       `${emoji} ${targetUsername}'s credit score changed from ${oldScore} to ${user.creditScore}\n${comment}`
     );
+    console.log('[Sticker Handler] Confirmation message sent.');
   } catch (err) {
     console.error('Error handling sticker:', err);
     await bot.sendMessage(msg.chat.id, "🚫 Sorry, there was an error processing your sticker. Please try again later.");
