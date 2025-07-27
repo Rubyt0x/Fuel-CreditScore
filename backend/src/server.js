@@ -97,7 +97,9 @@ const STICKER_CREDITS = {
   'CAACAgQAAyEFAASNsb1cAAEB1DxoR1ywgXya5nIdzlKZWFIuWMkFbgACdhkAAp3k8VAUQCVSnerVozYE': 20, // Add 20 points (👍 new)
   'CAACAgQAAyEFAASNsb1cAAEB065oR0CEpiUng5nVfWQnyAb6230kngACbBgAAtV88VC9oEwDXxJ0cjYE': -20, // Subtract 20 points (👎 new)
   'CAACAgQAAx0Cfqd5yAACmadoZlIcP3qkSXPuqLgRPgnOPmS8KQACdhkAAp3k8VAUQCVSnerVozYE': 20, // Add 20 points (👍 Rubyt0)
-  'CAACAgQAAxkBAAPSaGZViuWooIVcSeWRsZT5MirCHOwAAmwYAALVfPFQvaBMA18SdHI2BA': -20 // Subtract 20 points (👎 Rubyt0)
+  'CAACAgQAAxkBAAPSaGZViuWooIVcSeWRsZT5MirCHOwAAmwYAALVfPFQvaBMA18SdHI2BA': -20, // Subtract 20 points (👎 Rubyt0)
+  'CAACAgQAAx0Cfqd5yAACnVBog4HxT6GUSIpDDHvx0ate89LoZQACdhkAAp3k8VAUQCVSnerVozYE': 20, // Add 20 points (👍 new2)
+  'CAACAgQAAxkBAAPkaIaD-2u-9SBu4q2HhwjGVjuuc58AAmwYAALVfPFQvaBMA18SdHI2BA': -20 // Subtract 20 points (👎 new2)
 };
 
 // Telegram Bot setup
